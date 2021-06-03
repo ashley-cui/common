@@ -8,7 +8,7 @@ require (
 	github.com/containers/ocicrypt v1.1.1
 	github.com/containers/storage v1.30.0
 	github.com/docker/distribution v2.7.1+incompatible
-	github.com/docker/docker v20.10.3-0.20210216175712-646072ed6524+incompatible
+	github.com/docker/docker v20.10.7+incompatible
 	github.com/docker/go-units v0.4.0
 	github.com/ghodss/yaml v1.0.0
 	github.com/google/go-cmp v0.5.5 // indirect
