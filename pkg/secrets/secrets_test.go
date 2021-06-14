@@ -11,7 +11,7 @@ import (
 
 var drivertype = "file"
 
-var opts map[string]string
+var driveropts map[string]string
 
 func setup() (*SecretsManager, string, error) {
 	testpath, err := ioutil.TempDir("", "secretsdata")
@@ -19,7 +19,7 @@ func setup() (*SecretsManager, string, error) {
 		return nil, "", err
 	}
 	manager, err := NewManager(testpath)
-	opts = map[string]string{"path": testpath}
+	driveropts = map[string]string{"path": testpath}
 	return manager, testpath, err
 }
 
@@ -31,6 +31,10 @@ func TestAddSecretAndLookupData(t *testing.T) {
 	manager, testpath, err := setup()
 	require.NoError(t, err)
 	defer cleanup(testpath)
+
+	opts := SecretStoreOptions{
+		DriverOpts: driveropts,
+	}
 
 	_, err = manager.Store("mysecret", []byte("mydata"), drivertype, opts)
 	require.NoError(t, err)
@@ -48,6 +52,10 @@ func TestAddSecretName(t *testing.T) {
 	manager, testpath, err := setup()
 	require.NoError(t, err)
 	defer cleanup(testpath)
+
+	opts := SecretStoreOptions{
+		DriverOpts: driveropts,
+	}
 
 	// test one char secret name
 	_, err = manager.Store("a", []byte("mydata"), drivertype, opts)
@@ -79,6 +87,10 @@ func TestAddMultipleSecrets(t *testing.T) {
 	manager, testpath, err := setup()
 	require.NoError(t, err)
 	defer cleanup(testpath)
+
+	opts := SecretStoreOptions{
+		DriverOpts: driveropts,
+	}
 
 	id, err := manager.Store("mysecret", []byte("mydata"), drivertype, opts)
 	require.NoError(t, err)
@@ -114,6 +126,10 @@ func TestAddSecretDupName(t *testing.T) {
 	require.NoError(t, err)
 	defer cleanup(testpath)
 
+	opts := SecretStoreOptions{
+		DriverOpts: driveropts,
+	}
+
 	_, err = manager.Store("mysecret", []byte("mydata"), drivertype, opts)
 	require.NoError(t, err)
 
@@ -125,6 +141,10 @@ func TestAddSecretPrefix(t *testing.T) {
 	manager, testpath, err := setup()
 	require.NoError(t, err)
 	defer cleanup(testpath)
+
+	opts := SecretStoreOptions{
+		DriverOpts: driveropts,
+	}
 
 	// If the randomly generated secret id is something like "abcdeiuoergnadufigh"
 	// we should still allow someone to store a secret with the name "abcd" or "a"
@@ -139,6 +159,10 @@ func TestRemoveSecret(t *testing.T) {
 	manager, testpath, err := setup()
 	require.NoError(t, err)
 	defer cleanup(testpath)
+
+	opts := SecretStoreOptions{
+		DriverOpts: driveropts,
+	}
 
 	_, err = manager.Store("mysecret", []byte("mydata"), drivertype, opts)
 	require.NoError(t, err)
@@ -169,6 +193,9 @@ func TestLookupAllSecrets(t *testing.T) {
 	manager, testpath, err := setup()
 	require.NoError(t, err)
 	defer cleanup(testpath)
+	opts := SecretStoreOptions{
+		DriverOpts: driveropts,
+	}
 
 	id, err := manager.Store("mysecret", []byte("mydata"), drivertype, opts)
 	require.NoError(t, err)
@@ -183,6 +210,9 @@ func TestInspectSecretId(t *testing.T) {
 	manager, testpath, err := setup()
 	require.NoError(t, err)
 	defer cleanup(testpath)
+	opts := SecretStoreOptions{
+		DriverOpts: driveropts,
+	}
 
 	id, err := manager.Store("mysecret", []byte("mydata"), drivertype, opts)
 	require.NoError(t, err)
@@ -215,6 +245,9 @@ func TestSecretList(t *testing.T) {
 	manager, testpath, err := setup()
 	require.NoError(t, err)
 	defer cleanup(testpath)
+	opts := SecretStoreOptions{
+		DriverOpts: driveropts,
+	}
 
 	_, err = manager.Store("mysecret", []byte("mydata"), drivertype, opts)
 	require.NoError(t, err)
@@ -224,4 +257,60 @@ func TestSecretList(t *testing.T) {
 	allSecrets, err := manager.List()
 	require.NoError(t, err)
 	require.Len(t, allSecrets, 2)
+}
+
+func TestSecretFilters(t *testing.T) {
+	manager, testpath, err := setup()
+	require.NoError(t, err)
+	defer cleanup(testpath)
+	labels := map[string]string{
+		"label1": "a",
+	}
+	opts := SecretStoreOptions{
+		DriverOpts: driveropts,
+	}
+	labeledopts := SecretStoreOptions{
+		DriverOpts: driveropts,
+		Labels:     labels,
+	}
+
+	labeled, err := manager.Store("mysecret2", []byte("mydata2"), drivertype, labeledopts)
+	require.NoError(t, err)
+
+	id1, err := manager.Store("mysecret", []byte("mydata"), drivertype, opts)
+	require.NoError(t, err)
+
+	labelF := make(map[string][]string)
+	labelF["label"] = []string{"label1=a"}
+	idF := make(map[string][]string)
+	idF["id"] = []string{id1}
+
+	labelFilters, err := GenerateSecretFilters(labelF)
+	require.NoError(t, err)
+	idFilters, err := GenerateSecretFilters(idF)
+	require.NoError(t, err)
+
+	// list all secrets
+	allSecrets, err := manager.List()
+	require.NoError(t, err)
+	require.Len(t, allSecrets, 2)
+
+	// list only secrets witgh filter: tagged tag1: a
+	labelSecrets, err := manager.List(labelFilters...)
+	require.NoError(t, err)
+	require.Len(t, labelSecrets, 1)
+	require.Equal(t, labelSecrets[0].ID, labeled)
+
+	// list only secrets with filter: id1
+	filterIDSecrets, err := manager.List(idFilters...)
+	require.NoError(t, err)
+	require.Len(t, filterIDSecrets, 1)
+	require.Equal(t, filterIDSecrets[0].ID, id1)
+
+	bothFilters := make([]SecretFilter, 0, 2)
+	// filter both id1 and tag1:a, tags should be inclusive
+	bothFilters = append(idFilters, labelFilters...)
+	bothFilterSecrets, err := manager.List(bothFilters...)
+	require.NoError(t, err)
+	require.Len(t, bothFilterSecrets, 2)
 }
